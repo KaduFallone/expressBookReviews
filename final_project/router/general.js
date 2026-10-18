@@ -7,6 +7,7 @@ const public_users = express.Router();
 
 const BASE_URL = "http://localhost:5000";
 
+// Registrar novo usuário
 public_users.post("/register", (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
@@ -29,11 +30,13 @@ const findBooksBy = (field, value) =>
     result.length ? resolve(result) : reject(new Error("Nenhum livro encontrado"));
   });
 
+// Lista de todos os livros da loja
 public_users.get('/', async (req, res) => {
   const allBooks = await getBooks();
   return res.status(200).send(JSON.stringify(allBooks, null, 4));
 });
 
+// Detalhes do livro pelo ISBN
 public_users.get('/isbn/:isbn', (req, res) => {
   new Promise((resolve, reject) => {
     const book = books[req.params.isbn];
@@ -43,55 +46,85 @@ public_users.get('/isbn/:isbn', (req, res) => {
     .catch(err => res.status(404).json({ message: err.message }));
 });
 
+// Livros pelo autor
 public_users.get('/author/:author', (req, res) => {
   findBooksBy("author", req.params.author)
     .then(result => res.status(200).json({ booksbyauthor: result }))
     .catch(err => res.status(404).json({ message: err.message }));
 });
 
+// Livros pelo título
 public_users.get('/title/:title', (req, res) => {
   findBooksBy("title", req.params.title)
     .then(result => res.status(200).json({ booksbytitle: result }))
     .catch(err => res.status(404).json({ message: err.message }));
 });
 
+// Resenhas do livro
 public_users.get('/review/:isbn', (req, res) => {
   const book = books[req.params.isbn];
   if (!book) return res.status(404).json({ message: "Livro não encontrado" });
   return res.status(200).json(book.reviews);
 });
 
+// ===== Axios: as mesmas consultas feitas com async/await e Promises =====
+
+// Todos os livros: função async com callback, usando Axios
 const getAllBooks = async (callback) => {
   try {
     const response = await axios.get(`${BASE_URL}/`);
-    if (callback) callback(null, response.data);
-    else console.log(response.data);
+    callback(null, response.data);
   } catch (error) {
-    if (callback) callback(error);
-    else console.error("Erro ao buscar livros:", error.message);
+    callback(error);
   }
 };
 
-const getBookByISBN = (isbn) => {
-  axios.get(`${BASE_URL}/isbn/${isbn}`)
-    .then(response => console.log(response.data))
-    .catch(error => console.error("Erro ao buscar por ISBN:", error.message));
-};
+// Livro pelo ISBN: Promise com Axios
+const getBookByISBN = (isbn) =>
+  axios.get(`${BASE_URL}/isbn/${isbn}`).then(response => response.data);
 
+// Livros pelo autor: async/await com Axios
 const getBooksByAuthor = async (author) => {
-  try {
-    const response = await axios.get(`${BASE_URL}/author/${encodeURIComponent(author)}`);
-    console.log(response.data);
-  } catch (error) {
-    console.error("Erro ao buscar por autor:", error.message);
-  }
+  const response = await axios.get(`${BASE_URL}/author/${encodeURIComponent(author)}`);
+  return response.data;
 };
 
-const getBooksByTitle = (title) => {
-  axios.get(`${BASE_URL}/title/${encodeURIComponent(title)}`)
-    .then(response => console.log(response.data))
-    .catch(error => console.error("Erro ao buscar por título:", error.message));
-};
+// Livros pelo título: Promise com Axios
+const getBooksByTitle = (title) =>
+  axios.get(`${BASE_URL}/title/${encodeURIComponent(title)}`).then(response => response.data);
+
+const sendAxiosError = (res, error) =>
+  res.status(error.response ? error.response.status : 500)
+    .json(error.response ? error.response.data : { message: error.message });
+
+// Rotas que devolvem ao cliente o resultado das funções com Axios
+public_users.get('/axios/books', (req, res) => {
+  getAllBooks((error, allBooks) => {
+    if (error) return sendAxiosError(res, error);
+    return res.status(200).json(allBooks);
+  });
+});
+
+public_users.get('/axios/isbn/:isbn', (req, res) => {
+  getBookByISBN(req.params.isbn)
+    .then(book => res.status(200).json(book))
+    .catch(error => sendAxiosError(res, error));
+});
+
+public_users.get('/axios/author/:author', async (req, res) => {
+  try {
+    const result = await getBooksByAuthor(req.params.author);
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendAxiosError(res, error);
+  }
+});
+
+public_users.get('/axios/title/:title', (req, res) => {
+  getBooksByTitle(req.params.title)
+    .then(result => res.status(200).json(result))
+    .catch(error => sendAxiosError(res, error));
+});
 
 module.exports.general = public_users;
 module.exports.getAllBooks = getAllBooks;

@@ -19,7 +19,7 @@ regd_users.post("/login", (req, res) => {
   }
   const accessToken = jwt.sign({ data: password }, "access", { expiresIn: 60 * 60 });
   req.session.authorization = { accessToken, username };
-  return res.status(200).json({ message: "Login realizado com sucesso" });
+  return res.status(200).json({ message: `Usuário ${username} logado com sucesso`, accessToken });
 });
 
 regd_users.put("/auth/review/:isbn", (req, res) => {
